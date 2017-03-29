@@ -8,19 +8,12 @@ namespace Steering {
     /// Basic steering behaviour
     /// </summary>
     public abstract class SteeringBehaviour : ScriptableObject {
-        /// <summary>
-        /// Will be set in the start method of autonomousagent
-        /// </summary>
-        protected AutonomousAgent character;
-        public AutonomousAgent Character {
-            set {
-                character = value;
-            }
-        }
+        public abstract SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour);
 
-        public abstract SteeringOutput GetSteering();
+        public abstract void DrawGizmos(Transform characterTransform);
+        public abstract void DrawOnGUI();
 
-        public virtual void DrawOnGUI() { }
+        public abstract ScriptableObject DataObject();
     }
 
     [CustomEditor(typeof(SteeringBehaviour), true)]
@@ -30,21 +23,6 @@ namespace Steering {
             (target as SteeringBehaviour).DrawOnGUI();
         }
 
-    }
-#endregion
-
-#region Seek / Flee
-    /// <summary>
-    /// Specific steering behaviour for seek and flee
-    /// </summary>
-    public abstract class SeekFleeBehaviour : SteeringBehaviour {
-        private Transform target;
-
-        public override void DrawOnGUI() {
-            base.DrawOnGUI();
-
-            target = EditorGUILayout.ObjectField("Target: ", target, typeof(Transform), true) as Transform;
-        }
     }
 #endregion
 

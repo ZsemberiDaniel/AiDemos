@@ -25,18 +25,17 @@ namespace Steering {
         [SerializeField]
         internal float maxSpeed = 5f;
 
+        [SerializeField]
+        internal float maxAcceleration = 2f;
+
         /// <summary>
         /// The velocity of this agent
         /// </summary>
         private Vector3 velocity;
+        public Vector3 Velocity { get { return velocity; } }
 
-        #region Unity methods
+#region Unity methods
         private void Start() {
-            // Set te character for the behaviours
-            for (int i = 0; i < steeringBehaviours.Count; i++) {
-                steeringBehaviours[i].behaviour.Character = this;
-            }
-
             NormalizeWeights();
         }
 
@@ -45,7 +44,7 @@ namespace Steering {
 
                 case SteeringBlendingTypes.Single:
                     // Get the first and only steering we need
-                    SteeringOutput steering = steeringBehaviours[0].behaviour.GetSteering();
+                    SteeringOutput steering = steeringBehaviours[0].behaviour.GetSteering(this, steeringBehaviours[0]);
 
                     // Update pos and orientation
                     transform.position += velocity;
@@ -61,7 +60,13 @@ namespace Steering {
                     break;
             }
         }
-        #endregion
+
+        private void OnDrawGizmos() {
+            for (int i = 0; i < steeringBehaviours.Count; i++)
+                if (steeringBehaviours[i].behaviour != null)
+                    steeringBehaviours[i].behaviour.DrawGizmos(transform);
+        }
+#endregion
 
         /// <summary>
         /// Normalizes the weights of the behaviours so they add up to 1
@@ -79,13 +84,27 @@ namespace Steering {
         }
     }
 
+    /// <summary>
+    /// Contains data about the steering behaviour
+    /// </summary>
     [Serializable]
-    internal class WeightedSteeringBehaviour {
+    public class WeightedSteeringBehaviour : ScriptableObject {
         [SerializeField]
         public float weight;
 
         [SerializeField]
         public SteeringBehaviour behaviour;
+
+        [Seek]
+        [SerializeField]
+        public Transform target;
+    }
+
+    public static class AttributeOfBehaviour {
+        // To what type of behaviour what type of attribute belongs
+        public static Type[,] correspondingTypes = new Type[,] {
+            { typeof(SeekSteeringBehaviour), typeof(Seek) }
+        };
     }
 
     /// <summary>
@@ -105,21 +124,28 @@ namespace Steering {
         private bool proportionalEditing = true;
 
         private SerializedProperty blendingTypeProp;
-        private SerializedProperty maxSpeedProp;
 
         void OnEnable() {
             blendingTypeProp = serializedObject.FindProperty("blendingType");
-            maxSpeedProp = serializedObject.FindProperty("maxSpeed");
         }
 
         public override void OnInspectorGUI() {
             serializedObject.Update();
             AutonomousAgent agent = (AutonomousAgent) target;
 
+
             // Attributes
-            EditorGUILayout.LabelField("Attributes");
-            EditorGUILayout.PropertyField(maxSpeedProp);
-            agent.maxSpeed = maxSpeedProp.floatValue;
+            EditorGUILayout.LabelField("Agent attributes");
+
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Max speed: ");
+            agent.maxSpeed = EditorGUILayout.FloatField(agent.maxSpeed);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Max acceleration: ");
+            agent.maxAcceleration = EditorGUILayout.FloatField(agent.maxAcceleration);
+            GUILayout.EndHorizontal();
 
             EditorGUILayout.Separator();
             EditorGUILayout.LabelField("Behaviour");
@@ -137,46 +163,39 @@ namespace Steering {
                     // if we have something in the array already pick the first one
                     if (agent.steeringBehaviours.Count > 0) {
                         WeightedSteeringBehaviour behaviour = agent.steeringBehaviours[0];
+                        Debug.Log(behaviour);
 
                         agent.steeringBehaviours.Clear();
+                        Debug.Log(behaviour);
                         agent.steeringBehaviours.Add(behaviour);
                     } else { // We have nothing in the array -> add a new one
                         agent.steeringBehaviours.Clear();
-                        agent.steeringBehaviours.Add(new WeightedSteeringBehaviour());
+                        agent.steeringBehaviours.Add(ScriptableObject.CreateInstance<WeightedSteeringBehaviour>());
                     }
                 }
                 agent.steeringBehaviours[0].weight = 1f; // Set steering behaviour's weight to 1
 
-                agent.steeringBehaviours[0].behaviour =
-                    EditorGUILayout.ObjectField("Behaviour: ", agent.steeringBehaviours[0].behaviour, typeof(SteeringBehaviour), false) as SteeringBehaviour;
-
-                agent.steeringBehaviours[0].behaviour.DrawOnGUI();
+                DrawBehaviour(agent, 0);
 
 #endregion
             } else {
 #region Weighted custom editor
-                GUILayout.BeginHorizontal();
-                { 
-                    GUILayout.FlexibleSpace();
-                    // add behaviour button
-                    if (GUILayout.Button("Add new behaviour")) {
-                        agent.steeringBehaviours.Add(new WeightedSteeringBehaviour());
 
-                        // Only the first element can start on 1 because they need to be 1 summed up
-                        if (agent.steeringBehaviours.Count == 1)
-                            agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].weight = 1f;
-                        else
-                            agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].weight = 0f;
-                    }
+                proportionalEditing = EditorGUILayout.ToggleLeft("Proportional editing", proportionalEditing);
 
-                    proportionalEditing = EditorGUILayout.ToggleLeft("Proportional editing", proportionalEditing);
-                    GUILayout.FlexibleSpace();
+                // add behaviour button
+                if (GUILayout.Button("Add new behaviour")) {
+                    agent.steeringBehaviours.Add(ScriptableObject.CreateInstance<WeightedSteeringBehaviour>());
+
+                    // Only the first element can start on 1 because they need to be 1 summed up
+                    if (agent.steeringBehaviours.Count == 1)
+                        agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].weight = 1f;
+                    else
+                        agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].weight = 0f;
                 }
-                GUILayout.EndHorizontal();
-
+                
                 for (int i = agent.steeringBehaviours.Count - 1; i >= 0; i--) {
                     EditorGUILayout.Separator();
-
 
                     // delete button
                     EditorGUILayout.BeginHorizontal();
@@ -198,13 +217,7 @@ namespace Steering {
                         GUI.color = Color.white;
                     }
                     EditorGUILayout.EndHorizontal();
-                    agent.steeringBehaviours[i].behaviour =
-                        EditorGUILayout.ObjectField("Behaviour: ", agent.steeringBehaviours[i].behaviour, typeof(SteeringBehaviour), true) as SteeringBehaviour;
-
-                    // Steering behaviour settings
-                    if (agent.steeringBehaviours[i].behaviour != null) { 
-                        agent.steeringBehaviours[i].behaviour.DrawOnGUI();
-                    }
+                    DrawBehaviour(agent, i);
 
                     GUILayoutUtility.GetRect(200f, 10f);
                 }
@@ -230,14 +243,49 @@ namespace Steering {
                 UpdateLastWeights(agent);
 #endregion
             }
+        }
 
-            switch ((SteeringBlendingTypes) blendingTypeProp.enumValueIndex) {
-                case SteeringBlendingTypes.Single:
+        
 
-                    break;
-                default:
+        private void DrawBehaviour(AutonomousAgent agent, int index) {
+            agent.steeringBehaviours[index].behaviour
+                = EditorGUILayout.ObjectField("Behaviour: ", agent.steeringBehaviours[index].behaviour, typeof(SteeringBehaviour), false) as SteeringBehaviour;
 
-                    break;
+            // Steering behaviour settings
+            if (agent.steeringBehaviours[index].behaviour != null) {
+                // go through the corresponding types (to which class which attribute belongs)
+                for (int j = 0; j < AttributeOfBehaviour.correspondingTypes.GetLength(0); j++) {
+                    // agent's behaviour has the same type as we are examining
+                    if (agent.steeringBehaviours[index].behaviour.GetType().Equals(AttributeOfBehaviour.correspondingTypes[j, 0])) {
+                        // get all fields of the behaviour because we are going to check their attributes
+                        var fields = agent.steeringBehaviours[index].GetType().GetFields();
+
+                        for (int i = 0; i < fields.Length; i++) {
+                            // all attributes of the current field
+                            var attributes = fields[i].GetCustomAttributes(false);
+
+                            for (int k = 0; k < attributes.Length; k++) {
+                                // if the current field has the corresponding attribute (to the current class type)
+                                if (attributes[k].GetType().Equals(AttributeOfBehaviour.correspondingTypes[j, 1])) {
+                                    // serialize the behaviour to get the current field as property and
+                                    // be able to display it to the editor
+                                    SerializedObject serializedBehav = new SerializedObject(agent.steeringBehaviours[index]);
+                                    SerializedProperty property = serializedBehav.FindProperty(fields[i].Name);
+
+                                    // display the property
+                                    serializedBehav.Update();
+                                    EditorGUILayout.PropertyField(property);
+
+                                    // set the property's value because for sme reason it doesn't update
+                                    // even if I put the update after the field............................sjnosdjfdjfdjkdfsojfdojfdosko
+                                    fields[i].SetValue(agent.steeringBehaviours[index], property.objectReferenceValue);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                agent.steeringBehaviours[index].behaviour.DrawOnGUI();
             }
         }
 
