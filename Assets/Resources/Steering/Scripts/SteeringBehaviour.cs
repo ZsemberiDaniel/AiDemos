@@ -12,8 +12,6 @@ namespace Steering {
 
         public abstract void DrawGizmos(Transform characterTransform);
         public abstract void DrawOnGUI();
-
-        public abstract ScriptableObject DataObject();
     }
 
     [CustomEditor(typeof(SteeringBehaviour), true)]

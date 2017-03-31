@@ -64,10 +64,6 @@ namespace Steering {
             return steering;
         }
 
-        public override ScriptableObject DataObject() {
-            return ScriptableObject.CreateInstance<ScriptableObject>();
-        }
-
         public override void DrawOnGUI() {
             // Slow down radius
             GUILayout.BeginHorizontal();

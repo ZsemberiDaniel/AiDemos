@@ -28,6 +28,8 @@ namespace Steering {
         [SerializeField]
         internal float maxAcceleration = 2f;
 
+        internal float maxAngularAcceleration;
+
         /// <summary>
         /// The velocity of this agent
         /// </summary>
@@ -52,10 +54,14 @@ namespace Steering {
                     // update with steering
                     velocity += steering.linear;
 
+                    float speed = velocity.magnitude;
                     // Limit to velocity
-                    if (velocity.magnitude > maxSpeed) {
+                    if (speed > maxSpeed) {
                         velocity.Normalize();
                         velocity *= maxSpeed;
+                    }
+                    if (Mathf.Approximately((float) Math.Round(speed, 1), 0f)) {
+                        velocity = new Vector3();
                     }
                     break;
             }
@@ -88,7 +94,7 @@ namespace Steering {
     /// Contains data about the steering behaviour
     /// </summary>
     [Serializable]
-    public class WeightedSteeringBehaviour : ScriptableObject {
+    public class WeightedSteeringBehaviour : MonoBehaviour {
         [SerializeField]
         public float weight;
 
@@ -100,10 +106,22 @@ namespace Steering {
         public Transform target;
     }
 
+    /// <summary>
+    /// So the weightedsteeringbehaviour component does not show anything on the gameobject
+    /// </summary>
+    [CustomEditor(typeof(WeightedSteeringBehaviour))]
+    public class WeightedSteeringBehaviourDrawer : Editor {
+
+    }
+
+    /// <summary>
+    /// Class for storing the attributes to the corresponding behaviours
+    /// </summary>
     public static class AttributeOfBehaviour {
         // To what type of behaviour what type of attribute belongs
         public static Type[,] correspondingTypes = new Type[,] {
-            { typeof(SeekSteeringBehaviour), typeof(Seek) }
+            { typeof(SeekSteeringBehaviour), typeof(Seek) },
+            { typeof(FleeSteeringBehaviour), typeof(Flee) }
         };
     }
 
@@ -163,20 +181,20 @@ namespace Steering {
                     // if we have something in the array already pick the first one
                     if (agent.steeringBehaviours.Count > 0) {
                         WeightedSteeringBehaviour behaviour = agent.steeringBehaviours[0];
-                        Debug.Log(behaviour);
+
+                        for (int i = 1; i < agent.steeringBehaviours.Count; i++)
+                            DestroyImmediate(agent.steeringBehaviours[i]);
 
                         agent.steeringBehaviours.Clear();
-                        Debug.Log(behaviour);
                         agent.steeringBehaviours.Add(behaviour);
                     } else { // We have nothing in the array -> add a new one
                         agent.steeringBehaviours.Clear();
-                        agent.steeringBehaviours.Add(ScriptableObject.CreateInstance<WeightedSteeringBehaviour>());
+                        agent.steeringBehaviours.Add(agent.gameObject.AddComponent<WeightedSteeringBehaviour>());
                     }
                 }
                 agent.steeringBehaviours[0].weight = 1f; // Set steering behaviour's weight to 1
 
                 DrawBehaviour(agent, 0);
-
 #endregion
             } else {
 #region Weighted custom editor
@@ -185,7 +203,7 @@ namespace Steering {
 
                 // add behaviour button
                 if (GUILayout.Button("Add new behaviour")) {
-                    agent.steeringBehaviours.Add(ScriptableObject.CreateInstance<WeightedSteeringBehaviour>());
+                    agent.steeringBehaviours.Add(agent.gameObject.AddComponent<WeightedSteeringBehaviour>());
 
                     // Only the first element can start on 1 because they need to be 1 summed up
                     if (agent.steeringBehaviours.Count == 1)
@@ -206,6 +224,7 @@ namespace Steering {
                         GUI.color = Color.red;
                         if (GUILayout.Button("X", GUILayout.Width(30f))) {
                             float updateAmount = agent.steeringBehaviours[i].weight;
+                            DestroyImmediate(agent.steeringBehaviours[i]);
                             agent.steeringBehaviours.RemoveAt(i);
                             
                             // Update because we deleted
@@ -287,6 +306,8 @@ namespace Steering {
 
                 agent.steeringBehaviours[index].behaviour.DrawOnGUI();
             }
+
+
         }
 
         /// <summary>
