@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace Steering {
     [CreateAssetMenu(menuName = "Steering Behaviours/Seeking")]
+    [System.Serializable]
     public class SeekSteeringBehaviour : SteeringBehaviour {
 
         /// <summary>
@@ -24,11 +25,19 @@ namespace Steering {
         [SerializeField]
         protected float timeToTarget = 0.1f;
 
-        public override SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour) {
-            return GetSteering(character, agentLocalBehaviour.target.position);
+        public override bool CanChangeVelocity() {
+            return true;
         }
 
-        public SteeringOutput GetSteering(AutonomousAgent character, Vector3 targetPostion) {
+        public override bool CanChangeRotation() {
+            return false;
+        }
+
+        public override SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour) {
+            return Seek(character, agentLocalBehaviour.target.position);
+        }
+
+        public SteeringOutput Seek(AutonomousAgent character, Vector3 targetPostion) {
             SteeringOutput steering = new SteeringOutput();
 
             // Get the direction

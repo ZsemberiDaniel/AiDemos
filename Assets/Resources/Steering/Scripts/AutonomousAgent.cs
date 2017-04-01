@@ -16,6 +16,12 @@ namespace Steering {
         internal List<WeightedSteeringBehaviour> steeringBehaviours = new List<WeightedSteeringBehaviour>();
 
         /// <summary>
+        /// Left here for the serialization thingy
+        /// </summary>
+        [SerializeField]
+        internal SteeringBehaviour[] temp = new SteeringBehaviour[0];
+
+        /// <summary>
         /// What type of blending to use with the steering behaviours
         /// </summary>
         [Tooltip("What type of blending to use with the steering behaviours.")]
@@ -23,22 +29,22 @@ namespace Steering {
         internal SteeringBlendingTypes blendingType;
 
         [SerializeField]
-        internal float maxSpeed = 5f;
+        internal float maxSpeed = 10f;
 
         [SerializeField]
-        internal float maxAcceleration = 2f;
-
-        /// <summary>
-        /// In degree
-        /// </summary>
-        [SerializeField]
-        internal float maxAngularAcceleration = 2f;
+        internal float maxAcceleration = 20f;
 
         /// <summary>
         /// In degree
         /// </summary>
         [SerializeField]
-        internal float maxRotation = 5f;
+        internal float maxAngularAcceleration = 30f;
+
+        /// <summary>
+        /// In degree
+        /// </summary>
+        [SerializeField]
+        internal float maxRotation = 20f;
 
         /// <summary>
         /// The velocity of this agent
@@ -55,7 +61,9 @@ namespace Steering {
         /// </summary>
         public float RotationVelocity { get { return rotationVelocity; } }
 
-#region Unity methods
+        internal bool showGizmos = true;
+
+        #region Unity methods
         private void Start() {
             NormalizeWeights();
         }
@@ -98,6 +106,8 @@ namespace Steering {
         }
 
         private void OnDrawGizmos() {
+            if (!showGizmos) return;
+
             for (int i = 0; i < steeringBehaviours.Count; i++)
                 if (steeringBehaviours[i].behaviour != null)
                     steeringBehaviours[i].behaviour.DrawGizmos(transform);
@@ -110,13 +120,29 @@ namespace Steering {
         private void NormalizeWeights() {
             float currentSum = 0f;
             for (int i = 0; i < steeringBehaviours.Count; i++)
-                currentSum += steeringBehaviours[i].weight;
+                currentSum += steeringBehaviours[i].velocityWeight;
 
             // Now we know what is all of the added up together so we can get weight of one with
             // currentWeight / sum
 
             for (int i = 0; i < steeringBehaviours.Count; i++)
-                steeringBehaviours[i].weight /= currentSum;
+                steeringBehaviours[i].velocityWeight /= currentSum;
+        }
+
+        // Left these in here just in case they are needed
+        // I don't know why but they solved the problem when the agents wouldn't want to
+        // Save their behaviour list when entering play mode
+        public void OnBeforeSerialize() {
+            temp = new SteeringBehaviour[steeringBehaviours.Count];
+            for (int i = 0; i < steeringBehaviours.Count; i++) {
+                temp[i] = steeringBehaviours[i].behaviour;
+            }
+        }
+
+        public void OnAfterDeserialize() {
+            for (int i = 0; i < steeringBehaviours.Count; i++) {
+                steeringBehaviours[i].behaviour = temp[i];
+            }
         }
     }
 
@@ -126,16 +152,15 @@ namespace Steering {
     [Serializable]
     public class WeightedSteeringBehaviour : MonoBehaviour {
         [SerializeField]
-        public float weight;
+        public float velocityWeight;
+
+        [SerializeField]
+        public float rotationWeight;
 
         [SerializeField]
         public SteeringBehaviour behaviour;
 
-        [Align]
-        [Seek]
-        [SerializeField]
-        [VelocityMatch]
-        [Pursue]
+        [Align] [Seek] [Flee] [VelocityMatch] [Pursue] [Evade] [Face]
         public Transform target;
     }
 
@@ -144,7 +169,9 @@ namespace Steering {
     /// </summary>
     [CustomEditor(typeof(WeightedSteeringBehaviour))]
     public class WeightedSteeringBehaviourDrawer : Editor {
-
+        public override void OnInspectorGUI() {
+            
+        }
     }
 
     /// <summary>
@@ -157,7 +184,9 @@ namespace Steering {
             { typeof(FleeSteeringBehaviour), typeof(Flee) },
             { typeof(AlignSteeringBehaviour), typeof(Align) },
             { typeof(VelocityMatchSteeringBehaviour), typeof(VelocityMatch) },
-            { typeof(PursueSteeringBehaviour), typeof(Pursue) }
+            { typeof(PursueSteeringBehaviour), typeof(Pursue) },
+            { typeof(EvadeSteeringBehaviour), typeof(Evade) },
+            { typeof(FaceSteeringBehaviour), typeof(Face) }
         };
     }
 
@@ -174,7 +203,11 @@ namespace Steering {
     [CustomEditor(typeof(AutonomousAgent))]
     public class AutonomousAgentDrawer : Editor {
 
-        private float[] lastWeights;
+        private Color velocitySliderColor = new Color(1f, 0.92157f, 0.23137f);
+        private Color rotationSliderColor = new Color(0.95686f, 0.26275f, 0.21176f);
+
+        private float[] lastVelocityWeights;
+        private float[] lastRotationWeights;
         private bool proportionalEditing = true;
 
         private SerializedProperty blendingTypeProp;
@@ -187,32 +220,45 @@ namespace Steering {
             serializedObject.Update();
             AutonomousAgent agent = (AutonomousAgent) target;
 
-
             // Attributes
-            EditorGUILayout.LabelField("Agent attributes");
+            EditorGUILayout.LabelField("Agent attributes", EditorStyles.boldLabel);
 
             GUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Max speed: ");
-            agent.maxSpeed = EditorGUILayout.FloatField(agent.maxSpeed);
+            {
+                EditorGUILayout.LabelField("Max speed: ");
+                agent.maxSpeed = EditorGUILayout.FloatField(agent.maxSpeed);
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Max acceleration: ");
-            agent.maxAcceleration = EditorGUILayout.FloatField(agent.maxAcceleration);
+            {
+                EditorGUILayout.LabelField("Max acceleration: ");
+                agent.maxAcceleration = EditorGUILayout.FloatField(agent.maxAcceleration);
+            }
             GUILayout.EndHorizontal();
             
             GUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Max rotation: ");
-            agent.maxRotation = EditorGUILayout.FloatField(agent.maxRotation);
+            {
+                EditorGUILayout.LabelField("Max rotation: ");
+                agent.maxRotation = EditorGUILayout.FloatField(agent.maxRotation);
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Max angular acceleration: ");
-            agent.maxAngularAcceleration = EditorGUILayout.FloatField(agent.maxAngularAcceleration);
+            {
+                EditorGUILayout.LabelField("Max angular acceleration: ");
+                agent.maxAngularAcceleration = EditorGUILayout.FloatField(agent.maxAngularAcceleration);
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            { 
+                agent.showGizmos = EditorGUILayout.Toggle("Show gizmos", agent.showGizmos);
+            }
             GUILayout.EndHorizontal();
 
             EditorGUILayout.Separator();
-            EditorGUILayout.LabelField("Behaviour");
+            EditorGUILayout.LabelField("Behaviour", EditorStyles.boldLabel);
             // Blending type
             EditorGUILayout.PropertyField(blendingTypeProp);
             agent.blendingType = (SteeringBlendingTypes) blendingTypeProp.enumValueIndex;
@@ -223,22 +269,16 @@ namespace Steering {
             if ((SteeringBlendingTypes) blendingTypeProp.enumValueIndex == SteeringBlendingTypes.Single) {
 #region Single custom editor
                 // If we don't have only one behaviour then make it so
-                if (agent.steeringBehaviours.Count != 1) {
-                    // if we have something in the array already pick the first one
-                    if (agent.steeringBehaviours.Count > 0) {
-                        WeightedSteeringBehaviour behaviour = agent.steeringBehaviours[0];
-
-                        for (int i = 1; i < agent.steeringBehaviours.Count; i++)
-                            DestroyImmediate(agent.steeringBehaviours[i]);
-
-                        agent.steeringBehaviours.Clear();
-                        agent.steeringBehaviours.Add(behaviour);
-                    } else { // We have nothing in the array -> add a new one
-                        agent.steeringBehaviours.Clear();
-                        agent.steeringBehaviours.Add(agent.gameObject.AddComponent<WeightedSteeringBehaviour>());
-                    }
+                if (agent.steeringBehaviours.Count > 1) {
+                    for (int i = agent.steeringBehaviours.Count - 1; i > 1; i--)
+                        agent.steeringBehaviours.RemoveAt(i);
+                } else if (agent.steeringBehaviours.Count == 0) {
+                    agent.steeringBehaviours.Add(agent.gameObject.AddComponent<WeightedSteeringBehaviour>());
                 }
-                agent.steeringBehaviours[0].weight = 1f; // Set steering behaviour's weight to 1
+
+                // Set steering behaviour's weight to 1
+                agent.steeringBehaviours[0].velocityWeight = 1f;
+                agent.steeringBehaviours[0].rotationWeight = 1f;
 
                 DrawBehaviour(agent, 0);
 #endregion
@@ -253,9 +293,9 @@ namespace Steering {
 
                     // Only the first element can start on 1 because they need to be 1 summed up
                     if (agent.steeringBehaviours.Count == 1)
-                        agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].weight = 1f;
+                        agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].velocityWeight = 1f;
                     else
-                        agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].weight = 0f;
+                        agent.steeringBehaviours[agent.steeringBehaviours.Count - 1].velocityWeight = 0f;
                 }
                 
                 for (int i = agent.steeringBehaviours.Count - 1; i >= 0; i--) {
@@ -264,41 +304,85 @@ namespace Steering {
                     // delete button
                     EditorGUILayout.BeginHorizontal();
                     {
-                        // weight slider
-                        agent.steeringBehaviours[i].weight = EditorGUILayout.Slider("Weight: ", agent.steeringBehaviours[i].weight, 0.01f, 1f);
+                        if (agent.steeringBehaviours[i].behaviour != null) { 
+                            if (agent.steeringBehaviours[i].behaviour.CanChangeVelocity()) {
+                                GUI.color = velocitySliderColor;
+                                {
+                                    // velocity weight slider
+                                    agent.steeringBehaviours[i].velocityWeight =
+                                        EditorGUILayout.Slider("Velocity weight: ", agent.steeringBehaviours[i].velocityWeight, 0.01f, 1f);
+                                }
+                                GUI.color = Color.white;
+                            } else if (agent.steeringBehaviours[i].behaviour.CanChangeRotation()) {
+                                GUI.color = rotationSliderColor;
+                                {
+                                    // rotation weight slider
+                                    agent.steeringBehaviours[i].rotationWeight =
+                                        EditorGUILayout.Slider("Rotation weight: ", agent.steeringBehaviours[i].rotationWeight, 0.01f, 1f);
+                                }
+                                GUI.color = Color.white;
+                            }
+                        }
 
                         GUI.color = Color.red;
-                        if (GUILayout.Button("X", GUILayout.Width(30f))) {
-                            float updateAmount = agent.steeringBehaviours[i].weight;
-                            DestroyImmediate(agent.steeringBehaviours[i]);
-                            agent.steeringBehaviours.RemoveAt(i);
+                        if (agent.steeringBehaviours.Count > 1) { 
+                            // DELETE
+                            if (GUILayout.Button("X", GUILayout.Width(30f))) {
+                                float updateAmountVelocity = agent.steeringBehaviours[i].velocityWeight;
+                                float updateAmountRotation = agent.steeringBehaviours[i].rotationWeight;
+                                DestroyImmediate(agent.steeringBehaviours[i]);
+                                agent.steeringBehaviours.RemoveAt(i);
                             
-                            // Update because we deleted
-                            UpdateWeightsProportionallyExcept(agent, updateAmount, -1);
-                            // Update the last weights so it doesn't detect change later down the code
-                            UpdateLastWeights(agent);
-                            continue;
+                                // Update because we deleted
+                                if (updateAmountVelocity != 0)
+                                    UpdateVelocityWeightsProportionallyExcept(agent, updateAmountVelocity, -1);
+                                if (updateAmountRotation != 0)
+                                    UpdateRotationWeightsProportionallyExcept(agent, updateAmountRotation, -1);
+                                // Update the last weights so it doesn't detect change later down the code
+                                UpdateLastWeights(agent);
+                                continue;
+                            }
                         }
                         GUI.color = Color.white;
                     }
                     EditorGUILayout.EndHorizontal();
+                    if (agent.steeringBehaviours[i].behaviour != null 
+                            && agent.steeringBehaviours[i].behaviour.CanChangeRotation()
+                            && agent.steeringBehaviours[i].behaviour.CanChangeVelocity()) { // we check for this because if it can't
+                        // rotation weight slider                                           // change velocity it drew 
+                        GUI.color = rotationSliderColor;                                    // the rotation weight before
+                        {
+                            agent.steeringBehaviours[i].rotationWeight =
+                            EditorGUILayout.Slider("Rotation weight: ", agent.steeringBehaviours[i].rotationWeight, 0.01f, 1f);
+                        }
+                        GUI.color = Color.white;
+                    }
                     DrawBehaviour(agent, i);
 
                     GUILayoutUtility.GetRect(200f, 10f);
                 }
 
                 // Here we are doing the magic of updating all other weights when we change one
-                if (lastWeights != null) {
-                    int till = Mathf.Min(lastWeights.Length, agent.steeringBehaviours.Count);
+                if (lastVelocityWeights != null) {
+                    int till = Mathf.Min(lastVelocityWeights.Length, agent.steeringBehaviours.Count);
 
                     // Go through each one and check whether it has changed
                     for (int i = 0; i < till; i++) {
-                        if (!Mathf.Approximately(lastWeights[i], agent.steeringBehaviours[i].weight)) {
+                        if (!Mathf.Approximately(lastVelocityWeights[i], agent.steeringBehaviours[i].velocityWeight)) {
                             // If it has changed
                             // Calculate how much it did
-                            float changeOthers = (lastWeights[i] - agent.steeringBehaviours[i].weight);
+                            float changeOthers = (lastVelocityWeights[i] - agent.steeringBehaviours[i].velocityWeight);
 
-                            UpdateWeightsProportionallyExcept(agent, changeOthers, i);
+                            UpdateVelocityWeightsProportionallyExcept(agent, changeOthers, i);
+                            break;
+                        }
+
+                        if (!Mathf.Approximately(lastRotationWeights[i], agent.steeringBehaviours[i].rotationWeight)) {
+                            // If it has changed
+                            // Calculate how much it did
+                            float changeOthers = (lastRotationWeights[i] - agent.steeringBehaviours[i].rotationWeight);
+
+                            UpdateRotationWeightsProportionallyExcept(agent, changeOthers, i);
                             break;
                         }
                     }
@@ -308,9 +392,8 @@ namespace Steering {
                 UpdateLastWeights(agent);
 #endregion
             }
+            serializedObject.ApplyModifiedProperties();
         }
-
-        
 
         private void DrawBehaviour(AutonomousAgent agent, int index) {
             agent.steeringBehaviours[index].behaviour
@@ -352,8 +435,6 @@ namespace Steering {
 
                 agent.steeringBehaviours[index].behaviour.DrawOnGUI();
             }
-
-
         }
 
         /// <summary>
@@ -362,7 +443,7 @@ namespace Steering {
         /// <param name="agent">The agent in which we want to update the weights</param>
         /// <param name="amount">How much to update</param>
         /// <param name="except">To which we don't want to add</param>
-        private void UpdateWeightsProportionallyExcept(AutonomousAgent agent, float amount, int except) {
+        private void UpdateVelocityWeightsProportionallyExcept(AutonomousAgent agent, float amount, int except) {
             if (!proportionalEditing) return;
 
             int till = agent.steeringBehaviours.Count;
@@ -371,29 +452,77 @@ namespace Steering {
             // We are going to use this to calculate how much the other weights should change
             float sumWithoutChanging = 0f;
             for (int k = 0; k < till; k++)
-                if (except != k)
-                    sumWithoutChanging += agent.steeringBehaviours[k].weight;
+                if (except != k && agent.steeringBehaviours[k].behaviour.CanChangeVelocity())
+                    sumWithoutChanging += agent.steeringBehaviours[k].velocityWeight;
 
             // Update all the other weights
             for (int k = 0; k < till; k++) {
-                if (except != k) {
-                    agent.steeringBehaviours[k].weight += amount *
-                            agent.steeringBehaviours[k].weight / sumWithoutChanging;
+                if (except != k && agent.steeringBehaviours[k].behaviour.CanChangeVelocity()) {
+                    agent.steeringBehaviours[k].velocityWeight += amount *
+                            agent.steeringBehaviours[k].velocityWeight / sumWithoutChanging;
                 }
             }
 
             if (agent.steeringBehaviours.Count > 0) { 
                 // If they don't sum up to 1 then add the missing amount to 0f
                 float sum = 0f;
-                for (int i = 0; i < agent.steeringBehaviours.Count; i++) sum += agent.steeringBehaviours[i].weight;
+                for (int i = 0; i < agent.steeringBehaviours.Count; i++)
+                    if (agent.steeringBehaviours[i].behaviour.CanChangeVelocity())
+                        sum += agent.steeringBehaviours[i].velocityWeight;
 
-                agent.steeringBehaviours[0].weight += (1f - sum);
+                for (int i = 0; i < agent.steeringBehaviours.Count; i++)
+                    if (agent.steeringBehaviours[i].behaviour.CanChangeVelocity())
+                        agent.steeringBehaviours[i].velocityWeight += (1f - sum);
+            }
+        }
+
+        /// <summary>
+        /// Update the weight proportionally to each other
+        /// </summary>
+        /// <param name="agent">The agent in which we want to update the weights</param>
+        /// <param name="amount">How much to update</param>
+        /// <param name="except">To which we don't want to add</param>
+        private void UpdateRotationWeightsProportionallyExcept(AutonomousAgent agent, float amount, int except) {
+            if (!proportionalEditing) return;
+
+            int till = agent.steeringBehaviours.Count;
+
+            // Add all the other weights together (excluding the except one)
+            // We are going to use this to calculate how much the other weights should change
+            float sumWithoutChanging = 0f;
+            for (int k = 0; k < till; k++)
+                if (except != k && agent.steeringBehaviours[k].behaviour.CanChangeRotation())
+                    sumWithoutChanging += agent.steeringBehaviours[k].rotationWeight;
+
+            // Update all the other weights
+            for (int k = 0; k < till; k++) {
+                if (except != k && agent.steeringBehaviours[k].behaviour.CanChangeRotation()) {
+                    agent.steeringBehaviours[k].rotationWeight += amount *
+                            agent.steeringBehaviours[k].rotationWeight / sumWithoutChanging;
+                }
+            }
+
+            if (agent.steeringBehaviours.Count > 0) {
+                // If they don't sum up to 1 then add the missing amount to 0f
+                float sum = 0f;
+                for (int i = 0; i < agent.steeringBehaviours.Count; i++)
+                    if (agent.steeringBehaviours[i].behaviour.CanChangeRotation())
+                        sum += agent.steeringBehaviours[i].rotationWeight;
+
+                for (int i = 0; i < agent.steeringBehaviours.Count; i++)
+                    if (agent.steeringBehaviours[i].behaviour.CanChangeRotation())
+                        agent.steeringBehaviours[i].rotationWeight += (1f - sum);
             }
         }
 
         private void UpdateLastWeights(AutonomousAgent agent) {
-            lastWeights = new float[agent.steeringBehaviours.Count];
-            for (int i = 0; i < agent.steeringBehaviours.Count; i++) lastWeights[i] = agent.steeringBehaviours[i].weight;
+            lastVelocityWeights = new float[agent.steeringBehaviours.Count];
+            lastRotationWeights = new float[agent.steeringBehaviours.Count];
+
+            for (int i = 0; i < agent.steeringBehaviours.Count; i++) { 
+                lastVelocityWeights[i] = agent.steeringBehaviours[i].velocityWeight;
+                lastRotationWeights[i] = agent.steeringBehaviours[i].rotationWeight;
+            }
         }
     }
 #endregion

@@ -4,13 +4,22 @@ using UnityEngine;
 
 namespace Steering {
     [CreateAssetMenu(menuName = "Steering Behaviours/Fleeing")]
+    [System.Serializable]
     public class FleeSteeringBehaviour : SteeringBehaviour {
+
+        public override bool CanChangeVelocity() {
+            return true;
+        }
+
+        public override bool CanChangeRotation() {
+            return false;
+        }
 
         /// <summary>
         /// In what radius the agent should detect enemies
         /// </summary>
         [SerializeField]
-        private float detectionRadius = 5f;
+        protected float detectionRadius = 5f;
         public float DetectionRadius {
             set {
                 detectionRadius = value;
@@ -21,14 +30,18 @@ namespace Steering {
         /// How much time it should take to reach the target in theory
         /// </summary>
         [SerializeField]
-        private float timeToTarget = 0.1f;
+        protected float timeToTarget = 0.1f;
 
         public override SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour) {
+            return Flee(character, agentLocalBehaviour.target.transform.position);
+        }
+
+        public SteeringOutput Flee(AutonomousAgent character, Vector3 targetPosition) {
             SteeringOutput steering = new SteeringOutput();
 
-            Vector3 direction = character.transform.position - agentLocalBehaviour.target.position;
+            Vector3 direction = character.transform.position - targetPosition;
             float distance = direction.magnitude;
-            
+
             Vector3 targetVelocity;
             // if the target is outside of detection radius stop
             if (distance > detectionRadius) {
@@ -39,7 +52,7 @@ namespace Steering {
                 float slowdown = 1f - (distance / detectionRadius - 0.9f) * 10f;
 
                 targetVelocity = direction.normalized * character.maxSpeed * slowdown;
-            } else { 
+            } else {
                 // go in that direction with tha max speed
                 targetVelocity = direction.normalized * character.maxSpeed;
             }

@@ -4,28 +4,41 @@ using UnityEngine;
 
 namespace Steering { 
     [CreateAssetMenu(menuName = "Steering Behaviours/Align")]
+    [System.Serializable]
     public class AlignSteeringBehaviour : SteeringBehaviour {
 
         /// <summary>
         /// How much time it should take to reach the target in theory
         /// </summary>
-        private float timeToTarget = 0.1f;
-        
-        private float targetRadius = 5f;
-        private float slowdownRadius = 20f;
+        protected float timeToTarget = 0.1f;
+
+        protected float targetRadius = 5f;
+        protected float slowdownRadius = 20f;
+
+        public override bool CanChangeVelocity() {
+            return false;
+        }
+
+        public override bool CanChangeRotation() {
+            return true;
+        }
 
         public override SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour) {
+            return Align(character, agentLocalBehaviour.transform.eulerAngles);
+        }
+
+        public SteeringOutput Align(AutonomousAgent character, Vector3 angle) {
             SteeringOutput output = new SteeringOutput();
 
             // rotation between the target and the character
             // only accounts for the z rotation which counts in 2d
-            float rotateOptionLeft = agentLocalBehaviour.target.transform.eulerAngles.z -
+            float rotateOptionLeft = angle.z -
                 character.transform.eulerAngles.z;
             // we count the right rotation like this because we get the ang between up and target
             // by subtracting it from 360f and we have to add target rotation to get the full right rotation
             float rotateOptionRight = character.transform.eulerAngles.z +
-                (360f - agentLocalBehaviour.target.transform.eulerAngles.z);
-            
+                (360f - angle.z);
+
             float rotation;
             // Decide which direction is better
             if (Mathf.Abs(rotateOptionLeft) > Mathf.Abs(rotateOptionRight))
@@ -40,12 +53,12 @@ namespace Steering {
             if (rotationSize < targetRadius) {
                 output.angular = -character.RotationVelocity;
                 return output;
-            // we are withing the slowdown radius -> start the slowdown
+                // we are withing the slowdown radius -> start the slowdown
             } else if (rotationSize < slowdownRadius) {
                 // we add target radius so it multiplies by 0 not when it is exactly at desired rotation
                 // but when it is inside the target radius
                 targetRotation = character.maxRotation * (rotationSize / (slowdownRadius + targetRadius));
-            // normal aligning without anything
+                // normal aligning without anything
             } else {
                 targetRotation = character.maxRotation;
             }

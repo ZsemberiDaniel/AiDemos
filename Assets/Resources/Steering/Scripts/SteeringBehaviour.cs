@@ -7,7 +7,11 @@ namespace Steering {
     /// <summary>
     /// Basic steering behaviour
     /// </summary>
+    [System.Serializable]
     public abstract class SteeringBehaviour : ScriptableObject {
+        public abstract bool CanChangeVelocity();
+        public abstract bool CanChangeRotation();
+
         public abstract SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour);
 
         public abstract void DrawGizmos(Transform characterTransform);

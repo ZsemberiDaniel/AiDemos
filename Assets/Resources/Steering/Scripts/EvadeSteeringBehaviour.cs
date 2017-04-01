@@ -3,9 +3,9 @@ using UnityEditor;
 using UnityEngine;
 
 namespace Steering {
-    [CreateAssetMenu(menuName = "Steering Behaviours/Pursue")]
+    [CreateAssetMenu(menuName = "Steering Behaviours/Evade")]
     [System.Serializable]
-    public class PursueSteeringBehaviour : SeekSteeringBehaviour {
+    public class EvadeSteeringBehaviour : FleeSteeringBehaviour {
 
         private Vector3 targetLastPostion;
         private float maxPrediction = 1f;
@@ -22,7 +22,7 @@ namespace Steering {
             SteeringOutput output = new SteeringOutput();
 
             if (targetLastPostion != null) {
-                output = Pursue(character, agentLocalBehaviour.target.transform.position, targetLastPostion, Time.fixedDeltaTime);
+                output = Evade(character, agentLocalBehaviour.target.transform.position, targetLastPostion, Time.fixedDeltaTime);
             }
             targetLastPostion = agentLocalBehaviour.target.transform.position;
 
@@ -30,23 +30,25 @@ namespace Steering {
         }
 
         /// <summary>
-        /// Pursue using the target's current position and it's last position. Plus the time between the two positions
+        /// Evade using the target's current position and it's last position. Plus the time between the two positions
         /// </summary>
-        public SteeringOutput Pursue(AutonomousAgent character, Vector3 targetPosition, Vector3 targetLastPosition, float timeBetween) {
+        public SteeringOutput Evade(AutonomousAgent character, Vector3 targetPosition, Vector3 targetLastPostion, float timeBetween) {
             // v = s / t
-            Vector3 targetVelocity = (targetPosition - targetLastPostion).normalized / timeBetween;
+            Vector3 velocityOfTarget = (targetPosition - targetLastPostion) / timeBetween;
 
-            return Pursue(character, targetPosition, targetVelocity);
+            return Evade(character, targetPosition, velocityOfTarget);
         }
 
         /// <summary>
-        /// Pursue using the target's position and it's velocity
+        /// Evade using the target's position and it's velocity
         /// </summary>
-        public SteeringOutput Pursue(AutonomousAgent character, Vector3 targetPosition, Vector3 targetVelocity) {
+        public SteeringOutput Evade(AutonomousAgent character, Vector3 targetPosition, Vector3 velocityOfTarget) {
+            SteeringOutput output = new SteeringOutput();
+
             // it calculates how long it would take the agent to get to the postion of the target
             // with the current speed. If that is too much it limits that down to maxPrediction.
             // We need that time to calculate where the target will be in the future in that time
-            // so we can set the target to that position.
+            // so we can set the target to that position and flee from it.
 
             float distance = (targetPosition - character.transform.position).magnitude;
             float agentSpeed = character.Velocity.magnitude;
@@ -58,8 +60,23 @@ namespace Steering {
                 prediction = distance / agentSpeed;
             }
 
+            // in which direction to evade
+            Vector3 evadeDirection = character.transform.position - (targetPosition + velocityOfTarget * prediction);
 
-            return base.Seek(character, targetPosition + targetVelocity * prediction);
+            // what velocity we want to reach
+            Vector3 targetVelocity;
+            // target is out of detection radius
+            if (distance > detectionRadius) {
+                targetVelocity = new Vector3();
+            } else {
+                targetVelocity = evadeDirection.normalized * character.maxSpeed;
+            }
+
+            // make acceleration
+            output.linear = targetVelocity - character.Velocity;
+            output.linear /= timeToTarget;
+
+            return output;
         }
 
         public override void DrawGizmos(Transform characterTransform) {
@@ -77,5 +94,5 @@ namespace Steering {
         }
     }
 
-    public class Pursue : Attribute { }
+    public class Evade : Attribute { }
 }
