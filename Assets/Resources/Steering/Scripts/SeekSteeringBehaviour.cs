@@ -10,25 +10,29 @@ namespace Steering {
         /// At what radius to the target the agent should start slowing down
         /// </summary>
         [SerializeField]
-        private float slowDownRadius = 3f;
+        protected float slowDownRadius = 3f;
 
         /// <summary>
         /// At what radius to the target the agent should stop
         /// </summary>
         [SerializeField]
-        private float targetRadius = 1f;
+        protected float targetRadius = 1f;
 
         /// <summary>
         /// How much time it should take to reach the target in theory
         /// </summary>
         [SerializeField]
-        private float timeToTarget = 0.1f;
+        protected float timeToTarget = 0.1f;
 
         public override SteeringOutput GetSteering(AutonomousAgent character, WeightedSteeringBehaviour agentLocalBehaviour) {
+            return GetSteering(character, agentLocalBehaviour.target.position);
+        }
+
+        public SteeringOutput GetSteering(AutonomousAgent character, Vector3 targetPostion) {
             SteeringOutput steering = new SteeringOutput();
 
             // Get the direction
-            Vector3 direction = agentLocalBehaviour.target.position - character.transform.position;
+            Vector3 direction = targetPostion - character.transform.position;
             float distance = direction.magnitude;
 
             // We are inside stopping radius
@@ -54,12 +58,6 @@ namespace Steering {
             // Calculate delta v then divide it by t because a = v / t
             steering.linear = targetVelocity - character.Velocity;
             steering.linear /= timeToTarget;
-
-            // Limit acceleration to max acceleration
-            if (steering.linear.magnitude > character.maxAcceleration) {
-                steering.linear.Normalize();
-                steering.linear *= character.maxAcceleration;
-            }
 
             return steering;
         }

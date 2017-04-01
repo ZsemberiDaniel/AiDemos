@@ -48,12 +48,6 @@ namespace Steering {
             steering.linear = targetVelocity - character.Velocity;
             steering.linear /= timeToTarget;
 
-            // we exceeded acceleration limit -> limit it
-            if (steering.linear.magnitude > character.maxAcceleration) {
-                steering.linear.Normalize();
-                steering.linear *= character.maxAcceleration;
-            }
-
             return steering;
         }
 

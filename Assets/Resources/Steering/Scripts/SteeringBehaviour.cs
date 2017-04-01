@@ -29,9 +29,21 @@ namespace Steering {
     /// </summary>
     public class SteeringOutput {
         public Vector3 linear;
+        public float angular;
 
         public SteeringOutput() {
             linear = new Vector3();
+        }
+
+        public void LimitOutputs(float linearLimit, float angularLimit) {
+            if (linear.magnitude > linearLimit) {
+                linear.Normalize();
+                linear *= linearLimit;
+            }
+            if (Mathf.Abs(angular) > angularLimit) {
+                // *... so it keeps it's direction
+                angular = angularLimit * (angular / Mathf.Abs(angular));
+            }
         }
     }
 }

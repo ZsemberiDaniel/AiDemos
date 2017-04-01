@@ -28,7 +28,17 @@ namespace Steering {
         [SerializeField]
         internal float maxAcceleration = 2f;
 
-        internal float maxAngularAcceleration;
+        /// <summary>
+        /// In degree
+        /// </summary>
+        [SerializeField]
+        internal float maxAngularAcceleration = 2f;
+
+        /// <summary>
+        /// In degree
+        /// </summary>
+        [SerializeField]
+        internal float maxRotation = 5f;
 
         /// <summary>
         /// The velocity of this agent
@@ -36,23 +46,36 @@ namespace Steering {
         private Vector3 velocity;
         public Vector3 Velocity { get { return velocity; } }
 
+        /// <summary>
+        /// How much this agent should rotate each frame
+        /// </summary>
+        private float rotationVelocity;
+        /// <summary>
+        /// How much this agent rotates each frame
+        /// </summary>
+        public float RotationVelocity { get { return rotationVelocity; } }
+
 #region Unity methods
         private void Start() {
             NormalizeWeights();
         }
 
-        private void Update() {
+        private void FixedUpdate() {
             switch (blendingType) {
 
                 case SteeringBlendingTypes.Single:
                     // Get the first and only steering we need
                     SteeringOutput steering = steeringBehaviours[0].behaviour.GetSteering(this, steeringBehaviours[0]);
 
+                    steering.LimitOutputs(maxAcceleration, maxAngularAcceleration);
+
                     // Update pos and orientation
-                    transform.position += velocity;
+                    transform.position += velocity * Time.fixedDeltaTime;
+                    transform.Rotate(0, 0, rotationVelocity * Time.fixedDeltaTime);
 
                     // update with steering
-                    velocity += steering.linear;
+                    velocity += steering.linear * Time.fixedDeltaTime;
+                    rotationVelocity += steering.angular * Time.fixedDeltaTime;
 
                     float speed = velocity.magnitude;
                     // Limit to velocity
@@ -60,8 +83,15 @@ namespace Steering {
                         velocity.Normalize();
                         velocity *= maxSpeed;
                     }
+
                     if (Mathf.Approximately((float) Math.Round(speed, 1), 0f)) {
                         velocity = new Vector3();
+                    }
+
+                    // Limit angular velocity
+                    if (rotationVelocity > maxRotation) {
+                        // * .... so it keeps the direction
+                        rotationVelocity = maxRotation * (maxRotation / Mathf.Abs(maxRotation));
                     }
                     break;
             }
@@ -101,8 +131,11 @@ namespace Steering {
         [SerializeField]
         public SteeringBehaviour behaviour;
 
+        [Align]
         [Seek]
         [SerializeField]
+        [VelocityMatch]
+        [Pursue]
         public Transform target;
     }
 
@@ -121,7 +154,10 @@ namespace Steering {
         // To what type of behaviour what type of attribute belongs
         public static Type[,] correspondingTypes = new Type[,] {
             { typeof(SeekSteeringBehaviour), typeof(Seek) },
-            { typeof(FleeSteeringBehaviour), typeof(Flee) }
+            { typeof(FleeSteeringBehaviour), typeof(Flee) },
+            { typeof(AlignSteeringBehaviour), typeof(Align) },
+            { typeof(VelocityMatchSteeringBehaviour), typeof(VelocityMatch) },
+            { typeof(PursueSteeringBehaviour), typeof(Pursue) }
         };
     }
 
@@ -163,6 +199,16 @@ namespace Steering {
             GUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Max acceleration: ");
             agent.maxAcceleration = EditorGUILayout.FloatField(agent.maxAcceleration);
+            GUILayout.EndHorizontal();
+            
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Max rotation: ");
+            agent.maxRotation = EditorGUILayout.FloatField(agent.maxRotation);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Max angular acceleration: ");
+            agent.maxAngularAcceleration = EditorGUILayout.FloatField(agent.maxAngularAcceleration);
             GUILayout.EndHorizontal();
 
             EditorGUILayout.Separator();
