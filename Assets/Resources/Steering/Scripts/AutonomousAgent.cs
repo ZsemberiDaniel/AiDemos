@@ -162,6 +162,16 @@ namespace Steering {
 
         [Align] [Seek] [Flee] [VelocityMatch] [Pursue] [Evade] [Face]
         public Transform target;
+
+
+        // ================================================================================
+        // Extra variables
+        // ================================================================================
+        /// <summary>
+        /// Holds the angle of where the wandering is at
+        /// </summary>
+        [NonSerialized]
+        public float wanderAngle = 0f;
     }
 
     /// <summary>

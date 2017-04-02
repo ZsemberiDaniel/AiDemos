@@ -40,13 +40,21 @@ namespace Steering {
         }
 
         public void LimitOutputs(float linearLimit, float angularLimit) {
-            if (linear.magnitude > linearLimit) {
-                linear.Normalize();
-                linear *= linearLimit;
-            }
+            LimitLinear(linearLimit);
+            LimitAngular(angularLimit);
+        }
+
+        public void LimitAngular(float angularLimit) {
             if (Mathf.Abs(angular) > angularLimit) {
                 // *... so it keeps it's direction
                 angular = angularLimit * (angular / Mathf.Abs(angular));
+            }
+        }
+
+        public void LimitLinear(float linearLimit) {
+            if (linear.magnitude > linearLimit) {
+                linear.Normalize();
+                linear *= linearLimit;
             }
         }
     }
