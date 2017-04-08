@@ -163,6 +163,8 @@ namespace Steering {
         [Align] [Seek] [Flee] [VelocityMatch] [Pursue] [Evade] [Face]
         public Transform target;
 
+        [FollowPath]
+        public Path path;
 
         // ================================================================================
         // Extra variables
@@ -172,6 +174,12 @@ namespace Steering {
         /// </summary>
         [NonSerialized]
         public float wanderAngle = 0f;
+
+        /// <summary>
+        /// Holds for path following which is the current path station
+        /// </summary>
+        [NonSerialized]
+        public int currentPathStation = 1;
     }
 
     /// <summary>
@@ -196,7 +204,8 @@ namespace Steering {
             { typeof(VelocityMatchSteeringBehaviour), typeof(VelocityMatch) },
             { typeof(PursueSteeringBehaviour), typeof(Pursue) },
             { typeof(EvadeSteeringBehaviour), typeof(Evade) },
-            { typeof(FaceSteeringBehaviour), typeof(Face) }
+            { typeof(FaceSteeringBehaviour), typeof(Face) },
+            { typeof(FollowPathSteeringBehaviour), typeof(FollowPath) }
         };
     }
 
