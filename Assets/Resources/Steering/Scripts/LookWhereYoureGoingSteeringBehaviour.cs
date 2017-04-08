@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Steering {
     [CreateAssetMenu(menuName = "Steering Behaviours/Look where you're going")]
     [System.Serializable]
-    public class LookWhereYoureLookingSteeringBehaviour : AlignSteeringBehaviour {
+    public class LookWhereYoureGoingSteeringBehaviour : AlignSteeringBehaviour {
 
         public override bool CanChangeVelocity() {
             return false;

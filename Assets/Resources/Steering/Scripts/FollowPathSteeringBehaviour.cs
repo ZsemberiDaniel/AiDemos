@@ -69,7 +69,8 @@ namespace Steering {
                     Vector3 target = agentLocalBehaviour.path.GetPointOnPathPercent(percent + followAheadPercent);
                     output = Seek(character, target);
 
-                    Debug.DrawLine(character.transform.position, target, Color.green);
+                    if (character.showGizmos)
+                        Debug.DrawLine(character.transform.position, target, Color.green);
                     #endregion
                     break;
                 case FollowType.PredictivePath:
@@ -78,8 +79,10 @@ namespace Steering {
                     target = agentLocalBehaviour.path.GetPointOnPathPercent(percent + followAheadPercent);
                     output = Seek(character, target);
 
-                    Debug.DrawLine(character.transform.position, character.transform.position + character.Velocity * predictTime, Color.yellow);
-                    Debug.DrawLine(character.transform.position, target, Color.green);
+                    if (character.showGizmos) { 
+                        Debug.DrawLine(character.transform.position, character.transform.position + character.Velocity * predictTime, Color.yellow);
+                        Debug.DrawLine(character.transform.position, target, Color.green);
+                    }
                     #endregion
                     break;
             }

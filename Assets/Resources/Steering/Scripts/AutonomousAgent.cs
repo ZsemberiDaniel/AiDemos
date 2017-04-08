@@ -1,12 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace Steering { 
     [RequireComponent(typeof(SpriteRenderer))]
+    [RequireComponent(typeof(CircleCollider2D))]
     [Serializable]
     public class AutonomousAgent : MonoBehaviour {
+
+        [NonSerialized]
+        public CircleCollider2D circleCollider;
 
         /// <summary>
         /// What kind of steering behaviours this autonomous agent has
@@ -14,6 +19,11 @@ namespace Steering {
         [Tooltip("All the steering behaviours this autonomous agent has.")]
         [SerializeField]
         internal List<WeightedSteeringBehaviour> steeringBehaviours = new List<WeightedSteeringBehaviour>();
+
+        /// <summary>
+        /// The groups that are used in weighted with groups ordered.
+        /// </summary>
+        internal List<BehaviourGroup> orderedGroupList = new List<BehaviourGroup>();
 
         /// <summary>
         /// Left here for the serialization thingy
@@ -47,6 +57,12 @@ namespace Steering {
         internal float maxRotation = 20f;
 
         /// <summary>
+        /// Should the agent look where it's going instantly
+        /// </summary>
+        [SerializeField]
+        internal bool lookWhereGoingInstantly = false;
+
+        /// <summary>
         /// The velocity of this agent
         /// </summary>
         private Vector3 velocity;
@@ -66,42 +82,62 @@ namespace Steering {
         #region Unity methods
         private void Start() {
             NormalizeWeights();
+
+            circleCollider = GetComponent<CircleCollider2D>();
         }
 
         private void FixedUpdate() {
+            SteeringOutput steering = new SteeringOutput();
             switch (blendingType) {
 
+                #region Signle Blending
                 case SteeringBlendingTypes.Single:
                     // Get the first and only steering we need
-                    SteeringOutput steering = steeringBehaviours[0].behaviour.GetSteering(this, steeringBehaviours[0]);
-
-                    steering.LimitOutputs(maxAcceleration, maxAngularAcceleration);
-
-                    // Update pos and orientation
-                    transform.position += velocity * Time.fixedDeltaTime;
-                    transform.Rotate(0, 0, rotationVelocity * Time.fixedDeltaTime);
-
-                    // update with steering
-                    velocity += steering.linear * Time.fixedDeltaTime;
-                    rotationVelocity += steering.angular * Time.fixedDeltaTime;
-
-                    float speed = velocity.magnitude;
-                    // Limit to velocity
-                    if (speed > maxSpeed) {
-                        velocity.Normalize();
-                        velocity *= maxSpeed;
-                    }
-
-                    if (Mathf.Approximately((float) Math.Round(speed, 1), 0f)) {
-                        velocity = new Vector3();
-                    }
-
-                    // Limit angular velocity
-                    if (rotationVelocity > maxRotation) {
-                        // * .... so it keeps the direction
-                        rotationVelocity = maxRotation * (maxRotation / Mathf.Abs(maxRotation));
+                    steering = steeringBehaviours[0].behaviour.GetSteering(this, steeringBehaviours[0]);
+                    break;
+                #endregion
+                #region Weighted Blending
+                case SteeringBlendingTypes.Weighted:
+                    SteeringOutput weighted;
+                    for (int i = 0; i < steeringBehaviours.Count; i++) {
+                        weighted = steeringBehaviours[i].behaviour.GetSteering(this, steeringBehaviours[i]);
+                        steering.linear += weighted.linear * steeringBehaviours[i].velocityWeight;
+                        steering.angular += weighted.angular * steeringBehaviours[i].rotationWeight;
                     }
                     break;
+                #endregion
+            }
+
+            steering.LimitOutputs(maxAcceleration, maxAngularAcceleration);
+
+            // Update pos and orientation
+            transform.position += velocity * Time.fixedDeltaTime;
+            transform.Rotate(0, 0, rotationVelocity * Time.fixedDeltaTime);
+
+            velocity += steering.linear * Time.fixedDeltaTime;
+
+            float speed = velocity.magnitude;
+            // Limit to velocity
+            if (speed > maxSpeed) {
+                velocity.Normalize();
+                velocity *= maxSpeed;
+            }
+
+            if (Mathf.Approximately((float) Math.Round(speed, 1), 0f)) {
+                velocity = new Vector3();
+            }
+
+            if (lookWhereGoingInstantly) {
+                transform.rotation = Quaternion.Euler(0, 0, Mathf.Atan2(velocity.y, velocity.x) * Mathf.Rad2Deg - 90f);
+            } else { 
+                // update with steering
+                rotationVelocity += steering.angular * Time.fixedDeltaTime;
+
+                // Limit angular velocity
+                if (rotationVelocity > maxRotation) {
+                    // * .... so it keeps the direction
+                    rotationVelocity = maxRotation * (maxRotation / Mathf.Abs(maxRotation));
+                }
             }
         }
 
@@ -209,13 +245,20 @@ namespace Steering {
         };
     }
 
+    [Serializable]
+    public class BehaviourGroup {
+        public string groupName;
+        public int groupPriority;
+    }
+
     /// <summary>
     /// All the blending types that we can use with the steering behaviours.
     /// </summary>
     [Serializable]
     public enum SteeringBlendingTypes {
         Single = 0,
-        Weighted = 1
+        Weighted = 1,
+        WeightedWithGroups = 2
     }
 
 #region Custom Editor
@@ -230,9 +273,20 @@ namespace Steering {
         private bool proportionalEditing = true;
 
         private SerializedProperty blendingTypeProp;
+        private ReorderableList groups;
 
         void OnEnable() {
             blendingTypeProp = serializedObject.FindProperty("blendingType");
+
+            #region Group reorderable list
+            groups = new ReorderableList(((AutonomousAgent) target).orderedGroupList, typeof(BehaviourGroup));
+
+            groups.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) => {
+                BehaviourGroup group = groups.list[index] as BehaviourGroup;
+
+                group.groupName = EditorGUI.TextField(rect, group.groupName);
+            };
+            #endregion
         }
 
         public override void OnInspectorGUI() {
@@ -241,40 +295,12 @@ namespace Steering {
 
             // Attributes
             EditorGUILayout.LabelField("Agent attributes", EditorStyles.boldLabel);
-
-            GUILayout.BeginHorizontal();
-            {
-                EditorGUILayout.LabelField("Max speed: ");
-                agent.maxSpeed = EditorGUILayout.FloatField(agent.maxSpeed);
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            {
-                EditorGUILayout.LabelField("Max acceleration: ");
-                agent.maxAcceleration = EditorGUILayout.FloatField(agent.maxAcceleration);
-            }
-            GUILayout.EndHorizontal();
-            
-            GUILayout.BeginHorizontal();
-            {
-                EditorGUILayout.LabelField("Max rotation: ");
-                agent.maxRotation = EditorGUILayout.FloatField(agent.maxRotation);
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            {
-                EditorGUILayout.LabelField("Max angular acceleration: ");
-                agent.maxAngularAcceleration = EditorGUILayout.FloatField(agent.maxAngularAcceleration);
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            { 
-                agent.showGizmos = EditorGUILayout.Toggle("Show gizmos", agent.showGizmos);
-            }
-            GUILayout.EndHorizontal();
+            agent.maxSpeed = EditorGUILayout.FloatField("Max speed: ", agent.maxSpeed);
+            agent.maxAcceleration = EditorGUILayout.FloatField("Max acceleration: ", agent.maxAcceleration);
+            agent.maxRotation = EditorGUILayout.FloatField("Max rotation: ", agent.maxRotation);
+            agent.maxAngularAcceleration = EditorGUILayout.FloatField("Max angular acceleration: ", agent.maxAngularAcceleration);
+            agent.showGizmos = EditorGUILayout.Toggle("Show gizmos", agent.showGizmos);
+            agent.lookWhereGoingInstantly = EditorGUILayout.Toggle("Look where going", agent.lookWhereGoingInstantly);
 
             EditorGUILayout.Separator();
             EditorGUILayout.LabelField("Behaviour", EditorStyles.boldLabel);
@@ -304,6 +330,10 @@ namespace Steering {
             } else {
 #region Weighted custom editor
 
+                if ((SteeringBlendingTypes) blendingTypeProp.enumValueIndex == SteeringBlendingTypes.WeightedWithGroups) {
+                    groups.DoLayoutList();
+                }
+
                 proportionalEditing = EditorGUILayout.ToggleLeft("Proportional editing", proportionalEditing);
 
                 // add behaviour button
@@ -320,6 +350,12 @@ namespace Steering {
                 for (int i = agent.steeringBehaviours.Count - 1; i >= 0; i--) {
                     EditorGUILayout.Separator();
 
+                    if (agent.steeringBehaviours[i].behaviour != null) {
+                        string className = agent.steeringBehaviours[i].behaviour.GetType().Name;
+
+                        EditorGUILayout.LabelField(className.Substring(0, className.Length - 17), EditorStyles.boldLabel);
+                    }
+
                     // delete button
                     EditorGUILayout.BeginHorizontal();
                     {
@@ -332,7 +368,7 @@ namespace Steering {
                                         EditorGUILayout.Slider("Velocity weight: ", agent.steeringBehaviours[i].velocityWeight, 0.01f, 1f);
                                 }
                                 GUI.color = Color.white;
-                            } else if (agent.steeringBehaviours[i].behaviour.CanChangeRotation()) {
+                            } else if (agent.steeringBehaviours[i].behaviour.CanChangeRotation() && !agent.lookWhereGoingInstantly) {
                                 GUI.color = rotationSliderColor;
                                 {
                                     // rotation weight slider
@@ -366,6 +402,7 @@ namespace Steering {
                     }
                     EditorGUILayout.EndHorizontal();
                     if (agent.steeringBehaviours[i].behaviour != null 
+                            && !agent.lookWhereGoingInstantly
                             && agent.steeringBehaviours[i].behaviour.CanChangeRotation()
                             && agent.steeringBehaviours[i].behaviour.CanChangeVelocity()) { // we check for this because if it can't
                         // rotation weight slider                                           // change velocity it drew 
